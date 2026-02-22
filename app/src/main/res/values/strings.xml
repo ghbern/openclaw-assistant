@@ -106,6 +106,14 @@
     <string name="read_ai_responses">Read AI responses aloud</string>
     <string name="continuous_conversation">Continuous Conversation</string>
     <string name="auto_start_mic">Auto-start mic after AI speaks</string>
+    <string name="elevenlabs_api_key_label">ElevenLabs API Key</string>
+    <string name="elevenlabs_api_key_hint">sk_...</string>
+    <string name="elevenlabs_default_voice_id_label">Default ElevenLabs Voice ID</string>
+    <string name="elevenlabs_default_voice_id_hint">(optional)</string>
+    <string name="elevenlabs_model_id_label">ElevenLabs Model ID</string>
+    <string name="elevenlabs_model_id_hint">eleven_turbo_v2_5</string>
+    <string name="agent_voice_mapping_label">Per-Agent Voice Mapping (JSON)</string>
+    <string name="agent_voice_mapping_hint">{ \"main\": \"voice-id-1\", \"bitcoin\": \"voice-id-2\" }</string>
     <string name="resume_latest_session">Resume Latest Session</string>
     <string name="resume_latest_session_desc">Continue previous conversation on activation</string>
     <string name="speech_silence_timeout">Silence Timeout</string>
