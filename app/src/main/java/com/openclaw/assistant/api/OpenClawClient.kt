@@ -18,38 +18,11 @@ import java.util.concurrent.TimeUnit
  */
 class OpenClawClient {
 
-    private fun buildClient(certPinsJson: String?): OkHttpClient {
-        val builder = OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
-
-        val pins = (certPinsJson ?: "").trim()
-        if (pins.isNotBlank()) {
-            try {
-                val obj = org.json.JSONObject(pins)
-                val pinnerBuilder = okhttp3.CertificatePinner.Builder()
-                val hosts = obj.keys()
-                while (hosts.hasNext()) {
-                    val host = hosts.next()
-                    val arr = obj.optJSONArray(host)
-                    if (arr != null) {
-                        for (i in 0 until arr.length()) {
-                            val pin = arr.optString(i)
-                            if (pin.startsWith("sha256/")) {
-                                pinnerBuilder.add(host, pin)
-                            }
-                        }
-                    }
-                }
-                builder.certificatePinner(pinnerBuilder.build())
-            } catch (_: Exception) {
-                // ignore malformed pin config
-            }
-        }
-
-        return builder.build()
-    }
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .build()
 
     private val gson = Gson()
 
@@ -58,7 +31,6 @@ class OpenClawClient {
      */
     suspend fun sendMessage(
         webhookUrl: String,
-         certPinsJson: String? = null,
         message: String,
         sessionId: String,
         authToken: String? = null,
@@ -67,11 +39,6 @@ class OpenClawClient {
         if (webhookUrl.isBlank()) {
             return@withContext Result.failure(
                 IllegalArgumentException("Webhook URL is not configured")
-            )
-        }
-        if (!webhookUrl.trim().startsWith("https://", ignoreCase = true)) {
-            return@withContext Result.failure(
-                IllegalArgumentException("Webhook URL must use HTTPS for secure communication")
             )
         }
 
@@ -107,7 +74,6 @@ class OpenClawClient {
             }
 
             val request = requestBuilder.build()
-            val client = buildClient(certPinsJson)
 
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
@@ -143,23 +109,15 @@ class OpenClawClient {
      */
     suspend fun testConnection(
         webhookUrl: String,
-        authToken: String?,
-        certPinsJson: String? = null
+        authToken: String?
     ): Result<Boolean> = withContext(Dispatchers.IO) {
         if (webhookUrl.isBlank()) {
             return@withContext Result.failure(
                 IllegalArgumentException("Webhook URL is not configured")
             )
         }
-        if (!webhookUrl.trim().startsWith("https://", ignoreCase = true)) {
-            return@withContext Result.failure(
-                IllegalArgumentException("Webhook URL must use HTTPS for secure communication")
-            )
-        }
 
         try {
-            val client = buildClient(certPinsJson)
-
             // Try a HEAD request first (lightweight)
             var requestBuilder = Request.Builder()
                 .url(webhookUrl)

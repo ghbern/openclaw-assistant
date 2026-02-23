@@ -5,7 +5,6 @@ import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import java.util.UUID
-import org.json.JSONObject
 
 /**
  * Secure settings storage
@@ -111,39 +110,6 @@ class SettingsRepository(context: Context) {
         get() = prefs.getFloat(KEY_TTS_SPEED, 1.2f)
         set(value) = prefs.edit().putFloat(KEY_TTS_SPEED, value).apply()
 
-    // ElevenLabs API key (optional, when present is primary TTS)
-    var elevenLabsApiKey: String
-        get() = prefs.getString(KEY_ELEVENLABS_API_KEY, "") ?: ""
-        set(value) = prefs.edit().putString(KEY_ELEVENLABS_API_KEY, value.trim()).apply()
-
-    // Default ElevenLabs voice ID
-    var elevenLabsDefaultVoiceId: String
-        get() = prefs.getString(KEY_ELEVENLABS_DEFAULT_VOICE_ID, "") ?: ""
-        set(value) = prefs.edit().putString(KEY_ELEVENLABS_DEFAULT_VOICE_ID, value.trim()).apply()
-
-    // ElevenLabs model ID
-    var elevenLabsModelId: String
-        get() = prefs.getString(KEY_ELEVENLABS_MODEL_ID, "eleven_turbo_v2_5") ?: "eleven_turbo_v2_5"
-        set(value) = prefs.edit().putString(KEY_ELEVENLABS_MODEL_ID, value.trim()).apply()
-
-    // Agent -> voice mapping JSON, e.g. {"main":"voiceIdA","coder":"voiceIdB"}
-    var agentVoiceMappingJson: String
-        get() = prefs.getString(KEY_AGENT_VOICE_MAPPING_JSON, "") ?: ""
-        set(value) = prefs.edit().putString(KEY_AGENT_VOICE_MAPPING_JSON, value.trim()).apply()
-
-    fun getElevenLabsVoiceIdForAgent(agentId: String?): String {
-        val id = agentId?.trim().orEmpty()
-        if (id.isNotEmpty()) {
-            try {
-                val obj = JSONObject(agentVoiceMappingJson.ifBlank { "{}" })
-                val mapped = obj.optString(id, "")
-                if (mapped.isNotBlank()) return mapped
-            } catch (_: Exception) {
-            }
-        }
-        return elevenLabsDefaultVoiceId
-    }
-
     // TTS Engine
     var ttsEngine: String
         get() = prefs.getString(KEY_TTS_ENGINE, "") ?: ""
@@ -182,12 +148,11 @@ class SettingsRepository(context: Context) {
 
     /**
      * Get the chat completions URL.
-     * Supports both base URL and full path, but enforces HTTPS-only.
+     * Supports both base URL (http://server) and full path (http://server/v1/chat/completions).
      */
     fun getChatCompletionsUrl(): String {
         val url = webhookUrl.trim().trimEnd('/')
         if (url.isBlank()) return ""
-        if (!url.startsWith("https://")) return ""
         return if (url.contains("/v1/")) url
         else "$url/v1/chat/completions"
     }
@@ -198,15 +163,9 @@ class SettingsRepository(context: Context) {
      */
     fun getBaseUrl(): String {
         val url = webhookUrl.trimEnd('/')
-        if (!url.startsWith("https://")) return ""
         val idx = url.indexOf("/v1/")
         return if (idx > 0) url.substring(0, idx) else url
     }
-
-    // Optional certificate pin map as JSON: {"host":["sha256/..."]}
-    var certPinsJson: String
-        get() = prefs.getString(KEY_CERT_PINS_JSON, "") ?: ""
-        set(value) = prefs.edit().putString(KEY_CERT_PINS_JSON, value.trim()).apply()
 
     // Check if configured
     fun isConfigured(): Boolean {
@@ -237,11 +196,6 @@ class SettingsRepository(context: Context) {
         private const val KEY_RESUME_LATEST_SESSION = "resume_latest_session"
         private const val KEY_TTS_SPEED = "tts_speed"
         private const val KEY_TTS_ENGINE = "tts_engine"
-        private const val KEY_ELEVENLABS_API_KEY = "elevenlabs_api_key"
-        private const val KEY_ELEVENLABS_DEFAULT_VOICE_ID = "elevenlabs_default_voice_id"
-        private const val KEY_ELEVENLABS_MODEL_ID = "elevenlabs_model_id"
-        private const val KEY_AGENT_VOICE_MAPPING_JSON = "agent_voice_mapping_json"
-        private const val KEY_CERT_PINS_JSON = "cert_pins_json"
         private const val KEY_GATEWAY_PORT = "gateway_port"
         private const val KEY_DEFAULT_AGENT_ID = "default_agent_id"
         private const val KEY_SPEECH_SILENCE_TIMEOUT = "speech_silence_timeout"

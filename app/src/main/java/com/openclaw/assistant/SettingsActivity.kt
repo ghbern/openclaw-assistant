@@ -82,14 +82,8 @@ fun SettingsScreen(
     var thinkingSoundEnabled by remember { mutableStateOf(settings.thinkingSoundEnabled) }
 
     var showAuthToken by remember { mutableStateOf(false) }
-    var showElevenLabsKey by remember { mutableStateOf(false) }
     var showWakeWordMenu by remember { mutableStateOf(false) }
     var showLanguageMenu by remember { mutableStateOf(false) }
-
-    var elevenLabsApiKey by remember { mutableStateOf(settings.elevenLabsApiKey) }
-    var elevenLabsDefaultVoiceId by remember { mutableStateOf(settings.elevenLabsDefaultVoiceId) }
-    var elevenLabsModelId by remember { mutableStateOf(settings.elevenLabsModelId) }
-    var agentVoiceMappingJson by remember { mutableStateOf(settings.agentVoiceMappingJson.ifBlank { "{\"main\": \"\"}" }) }
     
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -183,10 +177,6 @@ fun SettingsScreen(
                             settings.ttsEnabled = ttsEnabled
                             settings.ttsSpeed = ttsSpeed
                             settings.ttsEngine = ttsEngine
-                            settings.elevenLabsApiKey = elevenLabsApiKey
-                            settings.elevenLabsDefaultVoiceId = elevenLabsDefaultVoiceId
-                            settings.elevenLabsModelId = elevenLabsModelId
-                            settings.agentVoiceMappingJson = agentVoiceMappingJson
                             settings.continuousMode = continuousMode
                             settings.resumeLatestSession = resumeLatestSession
                             settings.wakeWordPreset = wakeWordPreset
@@ -604,63 +594,6 @@ fun SettingsScreen(
 
                     if (ttsEnabled) {
                         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.5.dp)
-
-                        // ElevenLabs Voice Configuration
-                        OutlinedTextField(
-                            value = elevenLabsApiKey,
-                            onValueChange = { elevenLabsApiKey = it },
-                            label = { Text(stringResource(R.string.elevenlabs_api_key_label)) },
-                            placeholder = { Text(stringResource(R.string.elevenlabs_api_key_hint)) },
-                            leadingIcon = { Icon(Icons.Default.Key, contentDescription = null) },
-                            trailingIcon = {
-                                IconButton(onClick = { showElevenLabsKey = !showElevenLabsKey }) {
-                                    Icon(
-                                        if (showElevenLabsKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                        contentDescription = null
-                                    )
-                                }
-                            },
-                            visualTransformation = if (showElevenLabsKey) VisualTransformation.None else PasswordVisualTransformation(),
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        OutlinedTextField(
-                            value = elevenLabsDefaultVoiceId,
-                            onValueChange = { elevenLabsDefaultVoiceId = it },
-                            label = { Text(stringResource(R.string.elevenlabs_default_voice_id_label)) },
-                            placeholder = { Text(stringResource(R.string.elevenlabs_default_voice_id_hint)) },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        OutlinedTextField(
-                            value = elevenLabsModelId,
-                            onValueChange = { elevenLabsModelId = it },
-                            label = { Text(stringResource(R.string.elevenlabs_model_id_label)) },
-                            placeholder = { Text(stringResource(R.string.elevenlabs_model_id_hint)) },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        OutlinedTextField(
-                            value = agentVoiceMappingJson,
-                            onValueChange = { agentVoiceMappingJson = it },
-                            label = { Text(stringResource(R.string.agent_voice_mapping_label)) },
-                            placeholder = { Text(stringResource(R.string.agent_voice_mapping_hint)) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(150.dp),
-                            maxLines = 8
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
 
                         // TTS Engine Selection
                         ExposedDropdownMenuBox(

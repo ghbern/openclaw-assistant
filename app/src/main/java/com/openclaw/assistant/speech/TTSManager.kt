@@ -29,7 +29,6 @@ class TTSManager(private val context: Context) {
     private var isInitialized = false
     private var pendingSpeak: (() -> Unit)? = null
     private val settings = com.openclaw.assistant.data.SettingsRepository.getInstance(context)
-    private val elevenLabsTTS = ElevenLabsTTS(context)
 
     init {
         initializeWithBruteForce()
@@ -94,17 +93,7 @@ class TTSManager(private val context: Context) {
         initializeWithBruteForce()
     }
 
-    suspend fun speak(text: String, agentId: String? = null): Boolean {
-        val apiKey = settings.elevenLabsApiKey
-        val voiceId = settings.getElevenLabsVoiceIdForAgent(agentId)
-        if (apiKey.isNotBlank() && voiceId.isNotBlank()) {
-            val model = settings.elevenLabsModelId.ifBlank { "eleven_turbo_v2_5" }
-            Log.d(TAG, "Using ElevenLabs primary TTS for agent=$agentId")
-            val ok = elevenLabsTTS.speak(apiKey = apiKey, voiceId = voiceId, text = text, modelId = model)
-            if (ok) return true
-            Log.w(TAG, "ElevenLabs TTS failed, falling back to Android TTS")
-        }
-
+    suspend fun speak(text: String): Boolean {
         // Query the engine's actual max input length instead of assuming 4000
         val maxLen = TTSUtils.getMaxInputLength(tts)
         val chunks = TTSUtils.splitTextForTTS(text, maxLen)

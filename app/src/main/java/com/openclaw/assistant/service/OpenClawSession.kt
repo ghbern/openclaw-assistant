@@ -333,8 +333,8 @@ class OpenClawSession(context: Context) : VoiceInteractionSession(context),
                                 val isTimeout = result.code == SpeechRecognizer.ERROR_SPEECH_TIMEOUT ||
                                               result.code == SpeechRecognizer.ERROR_NO_MATCH
 
-                                if (isTimeout && settings.continuousMode) {
-                                    Log.d(TAG, "Speech timeout in continuous mode ($elapsed ms), auto-resume listening...")
+                                if (isTimeout && settings.continuousMode && elapsed < 10000) {
+                                    Log.d(TAG, "Speech timeout within 10s window ($elapsed ms), retrying...")
                                 } else if (result.code == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
                                     speechManager.destroy()
                                     delay(1000)
@@ -356,13 +356,9 @@ class OpenClawSession(context: Context) : VoiceInteractionSession(context),
 
                 if (listenResult == null && !hasActuallySpoken) {
                     Log.w(TAG, "Speech recognition timed out (15s). Device may be locked.")
-                    if (settings.continuousMode) {
-                        Log.d(TAG, "Continuous mode enabled, auto-resuming recognizer")
-                    } else {
-                        // Manual timeout - close session without error screen
-                        finish() // Close the session
-                        hasActuallySpoken = true
-                    }
+                    // Manual timeout - close session without error screen
+                    finish() // Close the session
+                    hasActuallySpoken = true
                 }
                 
                 if (!hasActuallySpoken) {
@@ -373,7 +369,6 @@ class OpenClawSession(context: Context) : VoiceInteractionSession(context),
     }
 
     private var thinkingSoundJob: Job? = null
-    private var lastAgentIdUsed: String? = null
 
     private fun startThinkingSound() {
         thinkingSoundJob?.cancel()
@@ -409,8 +404,7 @@ class OpenClawSession(context: Context) : VoiceInteractionSession(context),
     }
 
     private suspend fun sendViaHttp(message: String) {
-        val agentId = settings.defaultAgentId.takeIf { it.isNotBlank() }
-        lastAgentIdUsed = agentId
+        val agentId = settings.defaultAgentId.takeIf { it.isNotBlank() && it != "main" }
         val result = apiClient.sendMessage(
             webhookUrl = settings.getChatCompletionsUrl(),
             message = message,
@@ -453,7 +447,7 @@ class OpenClawSession(context: Context) : VoiceInteractionSession(context),
         }
 
         if (settings.ttsEnabled) {
-            speakResponse(responseText, lastAgentIdUsed)
+            speakResponse(responseText)
         } else if (settings.continuousMode) {
             delay(500)
             startListening()
@@ -472,14 +466,14 @@ class OpenClawSession(context: Context) : VoiceInteractionSession(context),
         startListening()
     }
 
-    private fun speakResponse(text: String, agentId: String? = null) {
+    private fun speakResponse(text: String) {
         stopThinkingSound()
         currentState.value = AssistantState.SPEAKING
         val cleanText = TTSUtils.stripMarkdownForSpeech(text)
 
         speakingJob = scope.launch {
             try {
-                val success = ttsManager.speak(cleanText, agentId)
+                val success = ttsManager.speak(cleanText)
 
                 // Abandon audio focus after TTS completes
                 abandonAudioFocus()
