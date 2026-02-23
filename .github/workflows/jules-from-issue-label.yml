@@ -3,10 +3,11 @@ name: Jules from Issue Label
 on:
   issues:
     types: [labeled]
+  workflow_dispatch:
 
 jobs:
   create-jules-session:
-    if: github.event.label.name == 'jules' && github.event.issue.state == 'open'
+    if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'jules' && github.event.issue.state == 'open'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -26,8 +27,9 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${JULES_API_KEY_1:-}" ] && [ -z "${JULES_API_KEY_2:-}" ] && [ -z "${JULES_API_KEY_3:-}" ]; then
-            echo "error_message=No Jules API keys configured" >> "$GITHUB_OUTPUT"
-            exit 1
+            echo "error_message=No Jules API keys configured; skipping without failure" >> "$GITHUB_OUTPUT"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           TITLE="Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}"
           PROMPT="Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}
@@ -60,7 +62,7 @@ jobs:
           echo "key_used=${KEY_USED}" >> "$GITHUB_OUTPUT"
 
       - name: Comment success
-        if: steps.jules.outcome == 'success'
+        if: steps.jules.outcome == 'success' && steps.jules.outputs.skipped != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO_FULL: ${{ github.repository }}
