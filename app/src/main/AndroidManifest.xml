@@ -120,6 +120,12 @@
             </intent-filter>
         </receiver>
 
-    </application>
+            <!-- Disable Firebase auto-init in debug/distribution builds without real Firebase config -->
+        <provider
+            android:name="com.google.firebase.provider.FirebaseInitProvider"
+            android:authorities="${applicationId}.firebaseinitprovider"
+            tools:node="remove" />
+
+</application>
 
 </manifest>
