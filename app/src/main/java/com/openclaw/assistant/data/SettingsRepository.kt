@@ -187,7 +187,7 @@ class SettingsRepository(context: Context) {
     fun getChatCompletionsUrl(): String {
         val url = webhookUrl.trim().trimEnd('/')
         if (url.isBlank()) return ""
-        if (!url.startsWith("https://")) return ""
+        if (!url.startsWith("https://") && !url.startsWith("http://")) return ""
         return if (url.contains("/v1/")) url
         else "$url/v1/chat/completions"
     }
@@ -198,7 +198,7 @@ class SettingsRepository(context: Context) {
      */
     fun getBaseUrl(): String {
         val url = webhookUrl.trimEnd('/')
-        if (!url.startsWith("https://")) return ""
+        if (!url.startsWith("https://") && !url.startsWith("http://")) return ""
         val idx = url.indexOf("/v1/")
         return if (idx > 0) url.substring(0, idx) else url
     }
