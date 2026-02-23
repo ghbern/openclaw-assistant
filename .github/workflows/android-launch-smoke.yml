@@ -1,0 +1,121 @@
+name: Android Launch Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  launch-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare google-services.json
+        env:
+          DEBUG_GOOGLE_SERVICES_JSON: ${{ secrets.DEBUG_GOOGLE_SERVICES_JSON }}
+        run: |
+          set -euo pipefail
+          if [ -n "${DEBUG_GOOGLE_SERVICES_JSON:-}" ]; then
+            if printf '%s' "$DEBUG_GOOGLE_SERVICES_JSON" | head -c 1 | grep -q '{'; then
+              printf '%s' "$DEBUG_GOOGLE_SERVICES_JSON" > app/google-services.json
+            else
+              printf '%s' "$DEBUG_GOOGLE_SERVICES_JSON" | base64 --decode > app/google-services.json
+            fi
+          else
+            jq -n '{
+              project_info: {
+                project_number: "000000000000",
+                project_id: "mock-project-id",
+                storage_bucket: "mock-project-id.appspot.com"
+              },
+              client: [
+                {
+                  client_info: {
+                    mobilesdk_app_id: "1:000000000000:android:0000000000000000",
+                    android_client_info: { package_name: "com.openclaw.assistant" }
+                  },
+                  api_key: [{ current_key: "mock-api-key" }],
+                  services: { appinvite_service: { other_platform_oauth_client: [] } }
+                },
+                {
+                  client_info: {
+                    mobilesdk_app_id: "1:000000000000:android:0000000000000001",
+                    android_client_info: { package_name: "com.openclaw.assistant.debug" }
+                  },
+                  api_key: [{ current_key: "mock-api-key" }],
+                  services: { appinvite_service: { other_platform_oauth_client: [] } }
+                }
+              ],
+              configuration_version: "1"
+            }' > app/google-services.json
+          fi
+          jq . app/google-services.json >/dev/null
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Emulator launch smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            APK=app/build/outputs/apk/debug/app-debug.apk
+            PKG=com.openclaw.assistant.debug
+            ACT=com.openclaw.assistant.MainActivity
+
+            adb wait-for-device
+            adb shell settings put global window_animation_scale 0
+            adb shell settings put global transition_animation_scale 0
+            adb shell settings put global animator_duration_scale 0
+
+            adb uninstall "$PKG" || true
+            adb install -r "$APK"
+
+            adb logcat -c
+            adb shell am start -W -n "$PKG/$ACT" | tee launch.txt || true
+
+            sleep 25
+            PID=$(adb shell pidof "$PKG" || true)
+            echo "PID=$PID" | tee smoke-result.txt
+
+            adb shell dumpsys activity activities > dumpsys-activities.txt || true
+            adb logcat -d > logcat.txt || true
+
+            if [ -z "$PID" ]; then
+              echo "Launch smoke FAILED: app process not running after 25s" | tee -a smoke-result.txt
+              exit 1
+            fi
+
+            echo "Launch smoke PASSED" | tee -a smoke-result.txt
+
+      - name: Upload smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-launch-smoke-artifacts
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            launch.txt
+            smoke-result.txt
+            logcat.txt
+            dumpsys-activities.txt
