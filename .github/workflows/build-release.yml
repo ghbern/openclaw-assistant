@@ -35,54 +35,32 @@ jobs:
           set -euo pipefail
           if [ -z "${GOOGLE_SERVICES_JSON:-}" ]; then
             echo "GOOGLE_SERVICES_JSON secret missing; writing mock config for CI build"
-            cat > app/google-services.json << 'EOT'
-            {
-              "project_info": {
-                "project_number": "000000000000",
-                "project_id": "mock-project-id",
-                "storage_bucket": "mock-project-id.appspot.com"
+            jq -n '{
+              project_info: {
+                project_number: "000000000000",
+                project_id: "mock-project-id",
+                storage_bucket: "mock-project-id.appspot.com"
               },
-              "client": [
+              client: [
                 {
-                  "client_info": {
-                    "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
-                    "android_client_info": {
-                      "package_name": "com.openclaw.assistant"
-                    }
+                  client_info: {
+                    mobilesdk_app_id: "1:000000000000:android:0000000000000000",
+                    android_client_info: { package_name: "com.openclaw.assistant" }
                   },
-                  "api_key": [
-                    {
-                      "current_key": "mock-api-key"
-                    }
-                  ],
-                  "services": {
-                    "appinvite_service": {
-                      "other_platform_oauth_client": []
-                    }
-                  }
+                  api_key: [{ current_key: "mock-api-key" }],
+                  services: { appinvite_service: { other_platform_oauth_client: [] } }
                 },
                 {
-                  "client_info": {
-                    "mobilesdk_app_id": "1:000000000000:android:0000000000000001",
-                    "android_client_info": {
-                      "package_name": "com.openclaw.assistant.debug"
-                    }
+                  client_info: {
+                    mobilesdk_app_id: "1:000000000000:android:0000000000000001",
+                    android_client_info: { package_name: "com.openclaw.assistant.debug" }
                   },
-                  "api_key": [
-                    {
-                      "current_key": "mock-api-key"
-                    }
-                  ],
-                  "services": {
-                    "appinvite_service": {
-                      "other_platform_oauth_client": []
-                    }
-                  }
+                  api_key: [{ current_key: "mock-api-key" }],
+                  services: { appinvite_service: { other_platform_oauth_client: [] } }
                 }
               ],
-              "configuration_version": "1"
-            }
-            EOT
+              configuration_version: "1"
+            }' > app/google-services.json
           else
             # Accept either raw JSON secret or base64-encoded JSON secret
             if printf '%s' "$GOOGLE_SERVICES_JSON" | head -c 1 | grep -q '{'; then
