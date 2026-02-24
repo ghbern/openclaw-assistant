@@ -111,7 +111,27 @@ class SettingsRepository(context: Context) {
         get() = prefs.getFloat(KEY_TTS_SPEED, 1.2f)
         set(value) = prefs.edit().putFloat(KEY_TTS_SPEED, value).apply()
 
-    // ElevenLabs API key (optional, when present is primary TTS)
+    // TTS Provider
+    var ttsProvider: String
+        get() = prefs.getString(KEY_TTS_PROVIDER, TTS_PROVIDER_ANDROID_NATIVE) ?: TTS_PROVIDER_ANDROID_NATIVE
+        set(value) = prefs.edit().putString(KEY_TTS_PROVIDER, value).apply()
+
+    // OpenAI API key
+    var openAiApiKey: String
+        get() = prefs.getString(KEY_OPENAI_API_KEY, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_OPENAI_API_KEY, value.trim()).apply()
+
+    // OpenAI voice name
+    var openAiVoice: String
+        get() = prefs.getString(KEY_OPENAI_VOICE, "alloy") ?: "alloy"
+        set(value) = prefs.edit().putString(KEY_OPENAI_VOICE, value.trim()).apply()
+
+    // OpenAI model
+    var openAiModel: String
+        get() = prefs.getString(KEY_OPENAI_MODEL, "gpt-4o-mini-tts") ?: "gpt-4o-mini-tts"
+        set(value) = prefs.edit().putString(KEY_OPENAI_MODEL, value.trim()).apply()
+
+    // ElevenLabs API key
     var elevenLabsApiKey: String
         get() = prefs.getString(KEY_ELEVENLABS_API_KEY, "") ?: ""
         set(value) = prefs.edit().putString(KEY_ELEVENLABS_API_KEY, value.trim()).apply()
@@ -237,6 +257,10 @@ class SettingsRepository(context: Context) {
         private const val KEY_RESUME_LATEST_SESSION = "resume_latest_session"
         private const val KEY_TTS_SPEED = "tts_speed"
         private const val KEY_TTS_ENGINE = "tts_engine"
+        private const val KEY_TTS_PROVIDER = "tts_provider"
+        private const val KEY_OPENAI_API_KEY = "openai_api_key"
+        private const val KEY_OPENAI_VOICE = "openai_voice"
+        private const val KEY_OPENAI_MODEL = "openai_model"
         private const val KEY_ELEVENLABS_API_KEY = "elevenlabs_api_key"
         private const val KEY_ELEVENLABS_DEFAULT_VOICE_ID = "elevenlabs_default_voice_id"
         private const val KEY_ELEVENLABS_MODEL_ID = "elevenlabs_model_id"
@@ -257,7 +281,9 @@ class SettingsRepository(context: Context) {
         
         const val GOOGLE_TTS_PACKAGE = "com.google.android.tts"
 
-
+        const val TTS_PROVIDER_ANDROID_NATIVE = "android_native"
+        const val TTS_PROVIDER_OPENAI = "openai"
+        const val TTS_PROVIDER_ELEVENLABS = "elevenlabs"
 
         @Volatile
         private var instance: SettingsRepository? = null

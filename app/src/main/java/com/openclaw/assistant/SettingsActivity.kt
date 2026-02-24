@@ -82,10 +82,15 @@ fun SettingsScreen(
     var thinkingSoundEnabled by remember { mutableStateOf(settings.thinkingSoundEnabled) }
 
     var showAuthToken by remember { mutableStateOf(false) }
+    var showOpenAiKey by remember { mutableStateOf(false) }
     var showElevenLabsKey by remember { mutableStateOf(false) }
     var showWakeWordMenu by remember { mutableStateOf(false) }
     var showLanguageMenu by remember { mutableStateOf(false) }
 
+    var ttsProvider by remember { mutableStateOf(settings.ttsProvider) }
+    var openAiApiKey by remember { mutableStateOf(settings.openAiApiKey) }
+    var openAiVoice by remember { mutableStateOf(settings.openAiVoice) }
+    var openAiModel by remember { mutableStateOf(settings.openAiModel) }
     var elevenLabsApiKey by remember { mutableStateOf(settings.elevenLabsApiKey) }
     var elevenLabsDefaultVoiceId by remember { mutableStateOf(settings.elevenLabsDefaultVoiceId) }
     var elevenLabsModelId by remember { mutableStateOf(settings.elevenLabsModelId) }
@@ -183,6 +188,10 @@ fun SettingsScreen(
                             settings.ttsEnabled = ttsEnabled
                             settings.ttsSpeed = ttsSpeed
                             settings.ttsEngine = ttsEngine
+                            settings.ttsProvider = ttsProvider
+                            settings.openAiApiKey = openAiApiKey
+                            settings.openAiVoice = openAiVoice
+                            settings.openAiModel = openAiModel
                             settings.elevenLabsApiKey = elevenLabsApiKey
                             settings.elevenLabsDefaultVoiceId = elevenLabsDefaultVoiceId
                             settings.elevenLabsModelId = elevenLabsModelId
@@ -605,109 +614,42 @@ fun SettingsScreen(
                     if (ttsEnabled) {
                         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.5.dp)
 
-                        // ElevenLabs Voice Configuration
-                        OutlinedTextField(
-                            value = elevenLabsApiKey,
-                            onValueChange = { elevenLabsApiKey = it },
-                            label = { Text(stringResource(R.string.elevenlabs_api_key_label)) },
-                            placeholder = { Text(stringResource(R.string.elevenlabs_api_key_hint)) },
-                            leadingIcon = { Icon(Icons.Default.Key, contentDescription = null) },
-                            trailingIcon = {
-                                IconButton(onClick = { showElevenLabsKey = !showElevenLabsKey }) {
-                                    Icon(
-                                        if (showElevenLabsKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                        contentDescription = null
-                                    )
-                                }
-                            },
-                            visualTransformation = if (showElevenLabsKey) VisualTransformation.None else PasswordVisualTransformation(),
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
+                        val providerOptions = listOf(
+                            SettingsRepository.TTS_PROVIDER_ANDROID_NATIVE to stringResource(R.string.tts_provider_android_native),
+                            SettingsRepository.TTS_PROVIDER_OPENAI to stringResource(R.string.tts_provider_openai),
+                            SettingsRepository.TTS_PROVIDER_ELEVENLABS to stringResource(R.string.tts_provider_elevenlabs)
                         )
+                        var showProviderMenu by remember { mutableStateOf(false) }
 
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        OutlinedTextField(
-                            value = elevenLabsDefaultVoiceId,
-                            onValueChange = { elevenLabsDefaultVoiceId = it },
-                            label = { Text(stringResource(R.string.elevenlabs_default_voice_id_label)) },
-                            placeholder = { Text(stringResource(R.string.elevenlabs_default_voice_id_hint)) },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        OutlinedTextField(
-                            value = elevenLabsModelId,
-                            onValueChange = { elevenLabsModelId = it },
-                            label = { Text(stringResource(R.string.elevenlabs_model_id_label)) },
-                            placeholder = { Text(stringResource(R.string.elevenlabs_model_id_hint)) },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        OutlinedTextField(
-                            value = agentVoiceMappingJson,
-                            onValueChange = { agentVoiceMappingJson = it },
-                            label = { Text(stringResource(R.string.agent_voice_mapping_label)) },
-                            placeholder = { Text(stringResource(R.string.agent_voice_mapping_hint)) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(150.dp),
-                            maxLines = 8
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // TTS Engine Selection
                         ExposedDropdownMenuBox(
-                            expanded = showEngineMenu,
-                            onExpandedChange = { showEngineMenu = it }
+                            expanded = showProviderMenu,
+                            onExpandedChange = { showProviderMenu = it }
                         ) {
-                            val currentLabel = if (ttsEngine.isEmpty()) {
-                                stringResource(R.string.tts_engine_auto)
-                            } else {
-                                availableEngines.find { it.name == ttsEngine }?.label ?: ttsEngine
-                            }
+                            val currentProviderLabel = providerOptions.find { it.first == ttsProvider }?.second
+                                ?: stringResource(R.string.tts_provider_android_native)
 
                             OutlinedTextField(
-                                value = currentLabel,
+                                value = currentProviderLabel,
                                 onValueChange = {},
                                 readOnly = true,
-                                label = { Text(stringResource(R.string.tts_engine_label)) },
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showEngineMenu) },
+                                label = { Text(stringResource(R.string.tts_provider_label)) },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showProviderMenu) },
                                 modifier = Modifier.fillMaxWidth().menuAnchor()
                             )
 
                             ExposedDropdownMenu(
-                                expanded = showEngineMenu,
-                                onDismissRequest = { showEngineMenu = false }
+                                expanded = showProviderMenu,
+                                onDismissRequest = { showProviderMenu = false }
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.tts_engine_auto)) },
-                                    onClick = {
-                                        ttsEngine = ""
-                                        showEngineMenu = false
-                                    },
-                                    leadingIcon = {
-                                        if (ttsEngine.isEmpty()) {
-                                            Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                        }
-                                    }
-                                )
-
-                                availableEngines.forEach { engine ->
+                                providerOptions.forEach { (providerValue, providerLabel) ->
                                     DropdownMenuItem(
-                                        text = { Text(engine.label) },
+                                        text = { Text(providerLabel) },
                                         onClick = {
-                                            ttsEngine = engine.name
-                                            showEngineMenu = false
+                                            ttsProvider = providerValue
+                                            showProviderMenu = false
                                         },
                                         leadingIcon = {
-                                            if (ttsEngine == engine.name) {
+                                            if (ttsProvider == providerValue) {
                                                 Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                             }
                                         }
@@ -716,37 +658,197 @@ fun SettingsScreen(
                             }
                         }
 
-                        // Voice Speed (only if Google TTS)
-                        val effectiveEngine = if (ttsEngine.isEmpty()) {
-                            com.openclaw.assistant.speech.TTSEngineUtils.getDefaultEngine(context)
-                        } else {
-                            ttsEngine
-                        }
-                        val isGoogleTTS = effectiveEngine == SettingsRepository.GOOGLE_TTS_PACKAGE
+                        Spacer(modifier = Modifier.height(12.dp))
 
-                        if (isGoogleTTS) {
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            Row(
+                        if (ttsProvider == SettingsRepository.TTS_PROVIDER_OPENAI) {
+                            OutlinedTextField(
+                                value = openAiApiKey,
+                                onValueChange = { openAiApiKey = it },
+                                label = { Text(stringResource(R.string.openai_api_key_label)) },
+                                placeholder = { Text(stringResource(R.string.openai_api_key_hint)) },
+                                leadingIcon = { Icon(Icons.Default.Key, contentDescription = null) },
+                                trailingIcon = {
+                                    IconButton(onClick = { showOpenAiKey = !showOpenAiKey }) {
+                                        Icon(
+                                            if (showOpenAiKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                            contentDescription = null
+                                        )
+                                    }
+                                },
+                                visualTransformation = if (showOpenAiKey) VisualTransformation.None else PasswordVisualTransformation(),
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                singleLine = true
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            OutlinedTextField(
+                                value = openAiModel,
+                                onValueChange = { openAiModel = it },
+                                label = { Text(stringResource(R.string.openai_model_label)) },
+                                placeholder = { Text(stringResource(R.string.openai_model_hint)) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            OutlinedTextField(
+                                value = openAiVoice,
+                                onValueChange = { openAiVoice = it },
+                                label = { Text(stringResource(R.string.openai_voice_label)) },
+                                placeholder = { Text(stringResource(R.string.openai_voice_hint)) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(stringResource(R.string.openai_voice_help), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        }
+
+                        if (ttsProvider == SettingsRepository.TTS_PROVIDER_ELEVENLABS) {
+                            OutlinedTextField(
+                                value = elevenLabsApiKey,
+                                onValueChange = { elevenLabsApiKey = it },
+                                label = { Text(stringResource(R.string.elevenlabs_api_key_label)) },
+                                placeholder = { Text(stringResource(R.string.elevenlabs_api_key_hint)) },
+                                leadingIcon = { Icon(Icons.Default.Key, contentDescription = null) },
+                                trailingIcon = {
+                                    IconButton(onClick = { showElevenLabsKey = !showElevenLabsKey }) {
+                                        Icon(
+                                            if (showElevenLabsKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                            contentDescription = null
+                                        )
+                                    }
+                                },
+                                visualTransformation = if (showElevenLabsKey) VisualTransformation.None else PasswordVisualTransformation(),
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            OutlinedTextField(
+                                value = elevenLabsDefaultVoiceId,
+                                onValueChange = { elevenLabsDefaultVoiceId = it },
+                                label = { Text(stringResource(R.string.elevenlabs_default_voice_id_label)) },
+                                placeholder = { Text(stringResource(R.string.elevenlabs_default_voice_id_hint)) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            OutlinedTextField(
+                                value = elevenLabsModelId,
+                                onValueChange = { elevenLabsModelId = it },
+                                label = { Text(stringResource(R.string.elevenlabs_model_id_label)) },
+                                placeholder = { Text(stringResource(R.string.elevenlabs_model_id_hint)) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            OutlinedTextField(
+                                value = agentVoiceMappingJson,
+                                onValueChange = { agentVoiceMappingJson = it },
+                                label = { Text(stringResource(R.string.agent_voice_mapping_label)) },
+                                placeholder = { Text(stringResource(R.string.agent_voice_mapping_hint)) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(150.dp),
+                                maxLines = 8
+                            )
+                        }
+
+                        if (ttsProvider == SettingsRepository.TTS_PROVIDER_ANDROID_NATIVE) {
+                            // TTS Engine Selection
+                            ExposedDropdownMenuBox(
+                                expanded = showEngineMenu,
+                                onExpandedChange = { showEngineMenu = it }
                             ) {
-                                Text(stringResource(R.string.voice_speed), style = MaterialTheme.typography.bodyMedium)
-                                Text(
-                                    text = "%.1fx".format(ttsSpeed),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary
+                                val currentLabel = if (ttsEngine.isEmpty()) {
+                                    stringResource(R.string.tts_engine_auto)
+                                } else {
+                                    availableEngines.find { it.name == ttsEngine }?.label ?: ttsEngine
+                                }
+
+                                OutlinedTextField(
+                                    value = currentLabel,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text(stringResource(R.string.tts_engine_label)) },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showEngineMenu) },
+                                    modifier = Modifier.fillMaxWidth().menuAnchor()
                                 )
+
+                                ExposedDropdownMenu(
+                                    expanded = showEngineMenu,
+                                    onDismissRequest = { showEngineMenu = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.tts_engine_auto)) },
+                                        onClick = {
+                                            ttsEngine = ""
+                                            showEngineMenu = false
+                                        },
+                                        leadingIcon = {
+                                            if (ttsEngine.isEmpty()) {
+                                                Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                            }
+                                        }
+                                    )
+
+                                    availableEngines.forEach { engine ->
+                                        DropdownMenuItem(
+                                            text = { Text(engine.label) },
+                                            onClick = {
+                                                ttsEngine = engine.name
+                                                showEngineMenu = false
+                                            },
+                                            leadingIcon = {
+                                                if (ttsEngine == engine.name) {
+                                                    Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
                             }
 
-                            Slider(
-                                value = ttsSpeed,
-                                onValueChange = { ttsSpeed = it },
-                                valueRange = 0.5f..3.0f,
-                                steps = 24,
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                            // Voice Speed (only if Google TTS)
+                            val effectiveEngine = if (ttsEngine.isEmpty()) {
+                                com.openclaw.assistant.speech.TTSEngineUtils.getDefaultEngine(context)
+                            } else {
+                                ttsEngine
+                            }
+                            val isGoogleTTS = effectiveEngine == SettingsRepository.GOOGLE_TTS_PACKAGE
+
+                            if (isGoogleTTS) {
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(stringResource(R.string.voice_speed), style = MaterialTheme.typography.bodyMedium)
+                                    Text(
+                                        text = "%.1fx".format(ttsSpeed),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+
+                                Slider(
+                                    value = ttsSpeed,
+                                    onValueChange = { ttsSpeed = it },
+                                    valueRange = 0.5f..3.0f,
+                                    steps = 24,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                         }
                     }
 
