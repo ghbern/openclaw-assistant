@@ -43,6 +43,13 @@ class TTSManager(private val context: Context) {
     private val httpClient = OkHttpClient()
     private var externalPlayer: MediaPlayer? = null
 
+    companion object {
+        @Volatile private var openAiCooldownUntilMs: Long = 0L
+        @Volatile private var openAiBackoffAttempt: Int = 0
+        private const val OPENAI_BACKOFF_BASE_MS = 60_000L // 1 min
+        private const val OPENAI_BACKOFF_MAX_MS = 30 * 60_000L // 30 min
+    }
+
     init {
         initializeWithBruteForce()
     }
@@ -131,6 +138,18 @@ class TTSManager(private val context: Context) {
             return@withContext false
         }
 
+        val now = System.currentTimeMillis()
+        if (now < openAiCooldownUntilMs) {
+            val remainingSec = ((openAiCooldownUntilMs - now) / 1000L).coerceAtLeast(1L)
+            val msg = "OpenAI TTS is temporarily paused after quota/rate-limit errors. Try again in ${remainingSec}s."
+            if (settings.openAiFallbackToAndroidOn429) {
+                showError("$msg Using Android TTS fallback.")
+                return@withContext speakWithAndroidNative(text)
+            }
+            showError(msg)
+            return@withContext false
+        }
+
         val model = settings.openAiModel.ifBlank { "gpt-4o-mini-tts" }
         val voice = settings.openAiVoice.ifBlank { "alloy" }
         val payload = JSONObject().apply {
@@ -151,9 +170,30 @@ class TTSManager(private val context: Context) {
             httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     val body = response.body?.string().orEmpty()
+                    val isQuotaOrRateLimit = response.code == 429 || body.contains("insufficient_quota", ignoreCase = true)
+                    if (isQuotaOrRateLimit) {
+                        val multiplier = 1L shl openAiBackoffAttempt.coerceAtMost(5)
+                        val backoffMs = (OPENAI_BACKOFF_BASE_MS * multiplier).coerceAtMost(OPENAI_BACKOFF_MAX_MS)
+                        openAiBackoffAttempt = (openAiBackoffAttempt + 1).coerceAtMost(10)
+                        openAiCooldownUntilMs = System.currentTimeMillis() + backoffMs
+                        val backoffSec = backoffMs / 1000L
+                        val quotaMsg = "OpenAI TTS quota/rate-limit hit (429). Please check OpenAI billing/quota. Retrying is paused for ${backoffSec}s."
+                        if (settings.openAiFallbackToAndroidOn429) {
+                            showError("$quotaMsg Using Android TTS fallback.")
+                            return@withContext speakWithAndroidNative(text)
+                        }
+                        showError(quotaMsg)
+                        Log.e(TAG, "OpenAI TTS failed (429) body: ${body.take(300)}")
+                        return@withContext false
+                    }
+
                     showError("OpenAI TTS failed (${response.code}): ${body.take(180)}")
                     return@withContext false
                 }
+
+                openAiBackoffAttempt = 0
+                openAiCooldownUntilMs = 0L
+
                 val audioBytes = response.body?.bytes()
                 if (audioBytes == null || audioBytes.isEmpty()) {
                     showError("OpenAI TTS returned empty audio")

@@ -91,6 +91,7 @@ fun SettingsScreen(
     var openAiApiKey by remember { mutableStateOf(settings.openAiApiKey) }
     var openAiVoice by remember { mutableStateOf(settings.openAiVoice) }
     var openAiModel by remember { mutableStateOf(settings.openAiModel) }
+    var openAiFallbackToAndroidOn429 by remember { mutableStateOf(settings.openAiFallbackToAndroidOn429) }
     var elevenLabsApiKey by remember { mutableStateOf(settings.elevenLabsApiKey) }
     var elevenLabsDefaultVoiceId by remember { mutableStateOf(settings.elevenLabsDefaultVoiceId) }
     var elevenLabsModelId by remember { mutableStateOf(settings.elevenLabsModelId) }
@@ -192,6 +193,7 @@ fun SettingsScreen(
                             settings.openAiApiKey = openAiApiKey
                             settings.openAiVoice = openAiVoice
                             settings.openAiModel = openAiModel
+                            settings.openAiFallbackToAndroidOn429 = openAiFallbackToAndroidOn429
                             settings.elevenLabsApiKey = elevenLabsApiKey
                             settings.elevenLabsDefaultVoiceId = elevenLabsDefaultVoiceId
                             settings.elevenLabsModelId = elevenLabsModelId
@@ -704,6 +706,22 @@ fun SettingsScreen(
 
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(stringResource(R.string.openai_voice_help), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(stringResource(R.string.openai_fallback_on_429_label), style = MaterialTheme.typography.bodyLarge)
+                                    Text(stringResource(R.string.openai_fallback_on_429_desc), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                }
+                                Switch(
+                                    checked = openAiFallbackToAndroidOn429,
+                                    onCheckedChange = { openAiFallbackToAndroidOn429 = it }
+                                )
+                            }
                         }
 
                         if (ttsProvider == SettingsRepository.TTS_PROVIDER_ELEVENLABS) {

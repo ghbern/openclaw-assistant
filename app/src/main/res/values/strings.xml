@@ -117,6 +117,8 @@
     <string name="openai_voice_label">OpenAI Voice</string>
     <string name="openai_voice_hint">alloy</string>
     <string name="openai_voice_help">Examples: alloy, ash, ballad, coral, echo, sage, shimmer, verse</string>
+    <string name="openai_fallback_on_429_label">Fallback to Android voice on OpenAI quota/rate-limit</string>
+    <string name="openai_fallback_on_429_desc">If OpenAI TTS returns 429, use Android native TTS instead.</string>
     <string name="elevenlabs_api_key_label">ElevenLabs API Key</string>
     <string name="elevenlabs_api_key_hint">sk_...</string>
     <string name="elevenlabs_default_voice_id_label">Default ElevenLabs Voice ID</string>

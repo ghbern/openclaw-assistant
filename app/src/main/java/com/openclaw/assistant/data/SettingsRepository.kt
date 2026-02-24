@@ -131,6 +131,11 @@ class SettingsRepository(context: Context) {
         get() = prefs.getString(KEY_OPENAI_MODEL, "gpt-4o-mini-tts") ?: "gpt-4o-mini-tts"
         set(value) = prefs.edit().putString(KEY_OPENAI_MODEL, value.trim()).apply()
 
+    // Fallback to Android TTS when OpenAI returns quota/rate-limit errors
+    var openAiFallbackToAndroidOn429: Boolean
+        get() = prefs.getBoolean(KEY_OPENAI_FALLBACK_ON_429, false)
+        set(value) = prefs.edit().putBoolean(KEY_OPENAI_FALLBACK_ON_429, value).apply()
+
     // ElevenLabs API key
     var elevenLabsApiKey: String
         get() = prefs.getString(KEY_ELEVENLABS_API_KEY, "") ?: ""
@@ -261,6 +266,7 @@ class SettingsRepository(context: Context) {
         private const val KEY_OPENAI_API_KEY = "openai_api_key"
         private const val KEY_OPENAI_VOICE = "openai_voice"
         private const val KEY_OPENAI_MODEL = "openai_model"
+        private const val KEY_OPENAI_FALLBACK_ON_429 = "openai_fallback_on_429"
         private const val KEY_ELEVENLABS_API_KEY = "elevenlabs_api_key"
         private const val KEY_ELEVENLABS_DEFAULT_VOICE_ID = "elevenlabs_default_voice_id"
         private const val KEY_ELEVENLABS_MODEL_ID = "elevenlabs_model_id"
