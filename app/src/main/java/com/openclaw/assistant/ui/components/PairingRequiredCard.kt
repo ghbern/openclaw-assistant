@@ -32,7 +32,7 @@ fun PairingRequiredCard(deviceId: String) {
     val clipboardManager = remember { context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager }
 
     // Command generation
-    val pythonScript = "import sys, json; print(next((r['Request'] for r in json.load(sys.stdin).get('pending', []) if r.get('Device') == '$deviceId'), 'NOT_FOUND'))"
+    val pythonScript = "import sys, json; print(next((r['requestId'] for r in json.load(sys.stdin).get('pending', []) if r.get('deviceId') == '$deviceId'), 'NOT_FOUND'))"
     val approveCommand = "openclaw devices approve \$(openclaw devices list --json | python3 -c \"$pythonScript\")"
     val rejectCommand = "openclaw devices reject \$(openclaw devices list --json | python3 -c \"$pythonScript\")"
 

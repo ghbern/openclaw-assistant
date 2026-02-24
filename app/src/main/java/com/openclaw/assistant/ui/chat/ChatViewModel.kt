@@ -13,6 +13,7 @@ import com.openclaw.assistant.gateway.AgentInfo
 import com.openclaw.assistant.gateway.GatewayClient
 import com.openclaw.assistant.speech.SpeechRecognizerManager
 import com.openclaw.assistant.speech.SpeechResult
+import com.openclaw.assistant.speech.TTSManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -58,6 +59,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val gatewayClient = GatewayClient.getInstance()
     private val speechManager = SpeechRecognizerManager(application)
     private val toneGenerator = android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 100)
+    private val cloudTtsManager = TTSManager(application)
 
     private var thinkingSoundJob: Job? = null
 
@@ -412,11 +414,20 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { it.copy(isSpeaking = true) }
 
             try {
-                val success = if (isTTSReady && tts != null) {
-                    speakWithTTS(cleanText)
-                } else {
-                    Log.e(TAG, "TTS not ready, skipping speech")
-                    false
+                val success = when (settings.ttsProvider) {
+                    SettingsRepository.TTS_PROVIDER_OPENAI,
+                    SettingsRepository.TTS_PROVIDER_ELEVENLABS -> {
+                        // Strict provider path: do not silently fall back to Android voice.
+                        cloudTtsManager.speak(cleanText)
+                    }
+                    else -> {
+                        if (isTTSReady && tts != null) {
+                            speakWithTTS(cleanText)
+                        } else {
+                            Log.e(TAG, "Android TTS not ready, skipping speech")
+                            false
+                        }
+                    }
                 }
 
                 _uiState.update { it.copy(isSpeaking = false) }
@@ -438,6 +449,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 Log.e(TAG, "TTS speak error", e)
                 _uiState.update { it.copy(isSpeaking = false) }
                 tts?.stop()
+                cloudTtsManager.stop()
                 releaseWakeLock()
                 sendResumeBroadcast()
             }
@@ -560,6 +572,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun stopSpeaking() {
         lastInputWasVoice = false // Stop loop if manually stopped
         tts?.stop()
+        cloudTtsManager.stop()
         speakingJob?.cancel()
         speakingJob = null
         _uiState.update { it.copy(isSpeaking = false) }
@@ -569,6 +582,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     fun interruptAndListen() {
         tts?.stop()
+        cloudTtsManager.stop()
         speakingJob?.cancel()
         speakingJob = null
         _uiState.update { it.copy(isSpeaking = false) }
