@@ -1,0 +1,108 @@
+name: Android Candidate Pipeline
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-candidates:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [stable, no-voice]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Prepare debug google-services.json
+        run: |
+          set -euo pipefail
+          cat > app/google-services.json << 'EOT'
+          {
+            "project_info": {"project_number": "000000000000", "project_id": "mock-project-id", "storage_bucket": "mock-project-id.appspot.com"},
+            "client": [
+              {
+                "client_info": {"mobilesdk_app_id": "1:000000000000:android:0000000000000000", "android_client_info": {"package_name": "com.openclaw.assistant"}},
+                "api_key": [{"current_key": "AIzaSyA123456789012345678901234567890123"}],
+                "services": {"appinvite_service": {"other_platform_oauth_client": []}}
+              },
+              {
+                "client_info": {"mobilesdk_app_id": "1:000000000000:android:0000000000000001", "android_client_info": {"package_name": "com.openclaw.assistant.debug"}},
+                "api_key": [{"current_key": "AIzaSyA123456789012345678901234567890123"}],
+                "services": {"appinvite_service": {"other_platform_oauth_client": []}}
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOT
+
+      - name: Apply profile transforms
+        run: |
+          set -euo pipefail
+          echo "PROFILE=${{ matrix.profile }}"
+
+          # Always keep Firebase auto-init removed in CI candidate builds.
+          python3 - << 'PY'
+          from pathlib import Path
+          p=Path('app/src/main/AndroidManifest.xml')
+          s=p.read_text()
+          if 'firebaseinitprovider' not in s.lower():
+            insert='''        <provider
+            android:name="com.google.firebase.provider.FirebaseInitProvider"
+            android:authorities="${applicationId}.firebaseinitprovider"
+            tools:node="remove" />
+
+'''
+            idx=s.find('</application>')
+            s=s[:idx]+insert+s[idx:]
+            p.write_text(s)
+          PY
+
+          if [ "${{ matrix.profile }}" = "no-voice" ]; then
+            python3 - << 'PY'
+            from pathlib import Path
+            import re
+            p=Path('app/src/main/AndroidManifest.xml')
+            s=p.read_text()
+            patterns = [
+              r'\n\s*<!-- Voice Interaction Service \(Home button long press\) -->[\s\S]*?</service>\n\s*<service\n\s*android:name="com\.openclaw\.assistant\.service\.OpenClawAssistantSessionService"[\s\S]*?/>',
+              r'\n\s*<!-- Recognition Service \(Required for VoiceInteraction\) -->[\s\S]*?</service>',
+              r'\n\s*<!-- Session Foreground Service \(prevents process freeze during conversation\) -->[\s\S]*?/>',
+              r'\n\s*<!-- Hotword Detection Service \(Ambient Listening\) -->[\s\S]*?/>',
+              r'\n\s*<!-- Boot Receiver -->[\s\S]*?</receiver>'
+            ]
+            for pat in patterns:
+              s = re.sub(pat, '\n', s, count=1)
+            p.write_text(s)
+            print('Applied no-voice profile')
+            PY
+          fi
+
+      - name: Build debug APK
+        run: ./gradlew --no-daemon clean assembleDebug
+
+      - name: Rename artifact by profile
+        run: |
+          set -euo pipefail
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/openclaw-${{ matrix.profile }}.apk
+          sha256sum app/build/outputs/apk/debug/openclaw-${{ matrix.profile }}.apk | tee app/build/outputs/apk/debug/openclaw-${{ matrix.profile }}.apk.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openclaw-${{ matrix.profile }}
+          path: |
+            app/build/outputs/apk/debug/openclaw-${{ matrix.profile }}.apk
+            app/build/outputs/apk/debug/openclaw-${{ matrix.profile }}.apk.sha256
