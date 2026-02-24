@@ -276,7 +276,7 @@ class GatewayClient(context: android.content.Context) {
             } catch (e: Exception) {
                 Log.w(TAG, "Connection failed (attempt $attempt): ${e.message}")
                 if (attempt == 0 && !isTransientNetworkError(e)) {
-                    FirebaseCrashlytics.getInstance().recordException(e)
+                    recordNonFatal(e)
                 }
                 attempt++
                 _connectionState.value = ConnectionState.RECONNECTING
@@ -626,7 +626,7 @@ class GatewayClient(context: android.content.Context) {
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             Log.w(TAG, "WebSocket failure: ${t.message}")
             if (!isTransientNetworkError(t)) {
-                FirebaseCrashlytics.getInstance().recordException(t)
+                recordNonFatal(t)
             }
             if (connectDeferred?.isCompleted == false) {
                 connectDeferred?.completeExceptionally(t)
@@ -654,6 +654,16 @@ class GatewayClient(context: android.content.Context) {
             waiter.cancel()
         }
         pending.clear()
+    }
+
+    private fun recordNonFatal(t: Throwable) {
+        try {
+            FirebaseCrashlytics.getInstance().recordException(t)
+        } catch (_: IllegalStateException) {
+            // Firebase disabled/not initialized in this build profile.
+        } catch (_: Throwable) {
+            // Never let telemetry crash app runtime.
+        }
     }
 
     private fun isTransientNetworkError(t: Throwable): Boolean {
