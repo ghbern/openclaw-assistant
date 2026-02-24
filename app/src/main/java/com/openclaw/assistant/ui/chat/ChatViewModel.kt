@@ -412,6 +412,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         val cleanText = com.openclaw.assistant.speech.TTSUtils.stripMarkdownForSpeech(text)
         speakingJob = viewModelScope.launch {
             _uiState.update { it.copy(isSpeaking = true) }
+            if (lastInputWasVoice) {
+                toneGenerator.startTone(android.media.ToneGenerator.TONE_PROP_PROMPT, 120)
+            }
 
             try {
                 val success = when (settings.ttsProvider) {

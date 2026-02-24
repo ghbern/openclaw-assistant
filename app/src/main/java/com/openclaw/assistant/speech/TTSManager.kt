@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import okhttp3.ConnectionPool
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -27,6 +28,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 
 private const val TAG = "TTSManager"
@@ -40,7 +42,13 @@ class TTSManager(private val context: Context) {
     private var isInitialized = false
     private var pendingSpeak: (() -> Unit)? = null
     private val settings = SettingsRepository.getInstance(context)
-    private val httpClient = OkHttpClient()
+    private val httpClient = OkHttpClient.Builder()
+        .retryOnConnectionFailure(true)
+        .connectionPool(ConnectionPool(8, 5, TimeUnit.MINUTES))
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .build()
     private var externalPlayer: MediaPlayer? = null
 
     companion object {
@@ -152,60 +160,66 @@ class TTSManager(private val context: Context) {
 
         val model = settings.openAiModel.ifBlank { "gpt-4o-mini-tts" }
         val voice = settings.openAiVoice.ifBlank { "alloy" }
-        val payload = JSONObject().apply {
-            put("model", model)
-            put("voice", voice)
-            put("input", text)
-            put("response_format", "mp3")
-        }
+        val segments = splitForLowLatency(text)
 
-        val request = Request.Builder()
-            .url("https://api.openai.com/v1/audio/speech")
-            .header("Authorization", "Bearer $apiKey")
-            .header("Content-Type", "application/json")
-            .post(payload.toString().toRequestBody("application/json".toMediaType()))
-            .build()
+        for ((index, segment) in segments.withIndex()) {
+            val payload = JSONObject().apply {
+                put("model", model)
+                put("voice", voice)
+                put("input", segment)
+                put("response_format", "aac")
+            }
 
-        try {
-            httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    val body = response.body?.string().orEmpty()
-                    val isQuotaOrRateLimit = response.code == 429 || body.contains("insufficient_quota", ignoreCase = true)
-                    if (isQuotaOrRateLimit) {
-                        val multiplier = 1L shl openAiBackoffAttempt.coerceAtMost(5)
-                        val backoffMs = (OPENAI_BACKOFF_BASE_MS * multiplier).coerceAtMost(OPENAI_BACKOFF_MAX_MS)
-                        openAiBackoffAttempt = (openAiBackoffAttempt + 1).coerceAtMost(10)
-                        openAiCooldownUntilMs = System.currentTimeMillis() + backoffMs
-                        val backoffSec = backoffMs / 1000L
-                        val quotaMsg = "OpenAI TTS quota/rate-limit hit (429). Please check OpenAI billing/quota. Retrying is paused for ${backoffSec}s."
-                        if (settings.openAiFallbackToAndroidOn429) {
-                            showError("$quotaMsg Using Android TTS fallback.")
-                            return@withContext speakWithAndroidNative(text)
+            val request = Request.Builder()
+                .url("https://api.openai.com/v1/audio/speech")
+                .header("Authorization", "Bearer $apiKey")
+                .header("Content-Type", "application/json")
+                .post(payload.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+
+            try {
+                httpClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        val body = response.body?.string().orEmpty()
+                        val isQuotaOrRateLimit = response.code == 429 || body.contains("insufficient_quota", ignoreCase = true)
+                        if (isQuotaOrRateLimit) {
+                            val multiplier = 1L shl openAiBackoffAttempt.coerceAtMost(5)
+                            val backoffMs = (OPENAI_BACKOFF_BASE_MS * multiplier).coerceAtMost(OPENAI_BACKOFF_MAX_MS)
+                            openAiBackoffAttempt = (openAiBackoffAttempt + 1).coerceAtMost(10)
+                            openAiCooldownUntilMs = System.currentTimeMillis() + backoffMs
+                            val backoffSec = backoffMs / 1000L
+                            val quotaMsg = "OpenAI TTS quota/rate-limit hit (429). Please check OpenAI billing/quota. Retrying is paused for ${backoffSec}s."
+                            if (settings.openAiFallbackToAndroidOn429) {
+                                showError("$quotaMsg Using Android TTS fallback.")
+                                return@withContext speakWithAndroidNative(text)
+                            }
+                            showError(quotaMsg)
+                            Log.e(TAG, "OpenAI TTS failed (429) body: ${body.take(300)}")
+                            return@withContext false
                         }
-                        showError(quotaMsg)
-                        Log.e(TAG, "OpenAI TTS failed (429) body: ${body.take(300)}")
+
+                        showError("OpenAI TTS failed (${response.code}): ${body.take(180)}")
                         return@withContext false
                     }
 
-                    showError("OpenAI TTS failed (${response.code}): ${body.take(180)}")
-                    return@withContext false
-                }
+                    openAiBackoffAttempt = 0
+                    openAiCooldownUntilMs = 0L
 
-                openAiBackoffAttempt = 0
-                openAiCooldownUntilMs = 0L
-
-                val audioBytes = response.body?.bytes()
-                if (audioBytes == null || audioBytes.isEmpty()) {
-                    showError("OpenAI TTS returned empty audio")
-                    return@withContext false
+                    val audioBytes = response.body?.bytes()
+                    if (audioBytes == null || audioBytes.isEmpty()) {
+                        showError("OpenAI TTS returned empty audio")
+                        return@withContext false
+                    }
+                    val played = playAudioBytes(audioBytes, "openai_$index", ".m4a")
+                    if (!played) return@withContext false
                 }
-                return@withContext playAudioBytes(audioBytes, "openai")
+            } catch (e: Exception) {
+                Log.e(TAG, "OpenAI TTS request failed", e)
+                showError("OpenAI TTS error: ${e.message}")
+                return@withContext false
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "OpenAI TTS request failed", e)
-            showError("OpenAI TTS error: ${e.message}")
-            false
         }
+        true
     }
 
     private suspend fun speakWithElevenLabs(text: String): Boolean = withContext(Dispatchers.IO) {
@@ -257,12 +271,40 @@ class TTSManager(private val context: Context) {
         }
     }
 
-    private suspend fun playAudioBytes(audioBytes: ByteArray, source: String): Boolean =
+    private fun splitForLowLatency(text: String): List<String> {
+        val normalized = text.trim()
+        if (normalized.isEmpty()) return emptyList()
+
+        val sentenceRegex = Regex("(?<=[.!?。！？])\\s+")
+        val sentences = normalized.split(sentenceRegex).filter { it.isNotBlank() }
+        if (sentences.isEmpty()) return listOf(normalized)
+
+        val first = StringBuilder()
+        var i = 0
+        while (i < sentences.size) {
+            val candidate = if (first.isEmpty()) sentences[i] else "${first} ${sentences[i]}"
+            if (candidate.length <= 220 || first.isEmpty()) {
+                first.clear()
+                first.append(candidate)
+                i++
+            } else {
+                break
+            }
+        }
+
+        val tail = if (i < sentences.size) sentences.subList(i, sentences.size).joinToString(" ") else ""
+        return buildList {
+            add(first.toString())
+            if (tail.isNotBlank()) add(tail)
+        }
+    }
+
+    private suspend fun playAudioBytes(audioBytes: ByteArray, source: String, extension: String = ".mp3"): Boolean =
         withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { continuation ->
                 try {
                     stop()
-                    val tempFile = File.createTempFile("tts_$source", ".mp3", context.cacheDir)
+                    val tempFile = File.createTempFile("tts_$source", extension, context.cacheDir)
                     tempFile.writeBytes(audioBytes)
 
                     val player = MediaPlayer().apply {
